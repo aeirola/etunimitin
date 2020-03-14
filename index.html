@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<title>Etunimitin</title>
+
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.15.5/xlsx.core.min.js"></script>
+	<script type="text/javascript">
+		"use strict";
+
+		const params = new URLSearchParams(location.search);
+
+		const NUMBER_OF_NAMES = parseInt(params.get('amount'), 10) || 3;
+
+		const storageKey = "etunimitilasto.xlsx";
+		const nameListUrl = 'https://www.avoindata.fi/data/dataset/57282ad6-3ab1-48fb-983a-8aba5ff8d29a/resource/08c89936-a230-42e9-a9fc-288632e234f5/download/etunimitilasto-2020-02-06.xlsx';
+
+		/* Bootstrapping */
+		window.onload = () =>
+			loadNames()
+				.then(initUI)
+				.catch(console.error);
+
+		/* Source data handling */
+		function loadDataRemote() {
+			return fetch(nameListUrl)
+				.then(response => response.blob())
+				.then(blob => new Promise((resolve, reject) => {
+					const reader = new FileReader();
+					reader.addEventListener("loadend", () => resolve(new Uint8Array(reader.result)));
+					reader.addEventListener("onerror", reject);
+					reader.readAsArrayBuffer(blob);
+				}))
+				.then(data => XLSX.read(data, {type: 'array'}))
+				.then(workbook => ({
+					female: {
+						first: readSheet(workbook.Sheets['Naiset ens']),
+						other: readSheet(workbook.Sheets['Naiset muut']),
+					},
+					male: {
+						first: readSheet(workbook.Sheets['Miehet ens']),
+						other: readSheet(workbook.Sheets['Miehet muut']),
+					}
+				}));
+		}
+		function readSheet(worksheet) {
+			const json = XLSX.utils.sheet_to_json(worksheet);
+			return json.map(row => ({
+				name: row['Etunimi'],
+				amount: row['Lukumäärä']
+			}));
+		}
+		function loadDataLocal() {
+			const data = localStorage.getItem(storageKey);
+			return data
+				? Promise.resolve(JSON.parse(data))
+				: Promise.reject();
+		}
+		function storeDataLocal(data) {
+			localStorage.setItem(storageKey, JSON.stringify(data));
+			return Promise.resolve(data);
+		}
+
+		function loadNames() {
+			return loadDataLocal()
+				.catch(() => loadDataRemote().then(storeDataLocal));
+		}
+
+		/* Model creation */
+		function createModel(names) {
+			return {
+				female: {
+					first: createNameListModel(names.female.first),
+					other: createNameListModel(names.female.other),
+				},
+				male: {
+					first: createNameListModel(names.male.first),
+					other: createNameListModel(names.male.other),
+				}
+			};
+		}
+		function createNameListModel(nameList) {
+			const totalAmountOfNames = nameList.reduce((sum, row) => sum + row.amount, 0);
+			let totalAccumulatedWeight = 0;
+			return nameList.map(row => ({
+				name: row.name,
+				accumulatedWeight: totalAccumulatedWeight += (row.amount / totalAmountOfNames),
+			}));
+		}
+
+		/* Name generation */
+		function generateName(nameListModel) {
+			const selectedNameWeight = Math.random();
+			const selectedRow = nameListModel.find(row => row.accumulatedWeight >= selectedNameWeight);
+			return selectedRow.name;
+		}
+
+		/* UI control */
+		function initUI(names) {
+			const model = createModel(names);
+			generateNewNames(model);
+			document.addEventListener("click", () => generateNewNames(model));
+			document.body.className = 'loaded';
+		}
+
+		function generateNewNames(model) {
+			generateGenderNames('female', model.female);
+			generateGenderNames('male', model.male);
+		}
+
+		function generateGenderNames(gender, genderModel) {
+			clearNames(gender);
+			displayName(gender, generateName(genderModel.first))
+			for (let i = 0 ; i < NUMBER_OF_NAMES-1 ; i++) {
+				displayName(gender, generateName(genderModel.other));
+			}
+		}
+
+		function clearNames(gender) {
+			document.getElementById(gender+'_names').innerHTML = '';
+		}
+
+		function displayName(gender, name) {
+			const element = document.createElement('li');
+			element.appendChild(document.createTextNode(name));
+			document.getElementById(gender+'_names').appendChild(element);
+			return element;
+		}
+
+	</script>
+
+	<style type="text/css">
+		html {
+			height: 100%;
+			width: 100%;
+			display: flex;
+		}
+		body {
+			flex: 1;
+			margin: 0;
+			display: flex;
+			flex-direction: column;
+
+			font-family: monospace;
+			text-align: center;
+			font-size: 16pt;
+		}
+		.loading:before {
+			content: 'Ladataan...';
+			position: absolute;
+			top: 50%;
+			width: 100%;
+		}
+
+		ul {
+			padding: 0;
+		}
+		ul::before {
+			margin-top: 1rem;
+			font-weight: bold;
+			font-size: 1.2rem;
+			opacity: 0.5;
+		}
+		ul[id=female_names]::before { content: '\2640'; }
+		ul[id=male_names]::before { content: '\2642'; }
+		li {
+			list-style: none;
+		}
+		li:first-child {
+			text-decoration: underline;
+		}
+
+		section {
+			flex-grow: 1;
+		}
+		footer {
+			padding: 2rem;
+			font-size: 50%;
+			opacity: 0.75;
+		}
+		footer p {
+			margin: 0;
+		}
+		footer a {
+			color: black;
+		}
+	</style>
+</head>
+<body class="loading">
+	<header>
+		<h1>Etunimitin</h1>
+	</header>
+	<section>
+		<ul id="female_names"></ul>
+		<ul id="male_names"></ul>
+	</section>
+	<footer>
+		<p>
+			Paina lataaksesi lisää nimiä.
+		</p>
+		<p>
+			Lähdeaineisto <a href="https://www.avoindata.fi/data/fi/dataset/none">Väestörekisterikeskuksen etunimitilasto</a>.
+		</p>
+	</footer>
+</body>
+</html>
