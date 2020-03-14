@@ -12,7 +12,12 @@
 
 		const params = new URLSearchParams(location.search);
 
+		const MIN_LENGTH = parseInt(params.get('minLength'), 10) || 1;
+		const MAX_LENGTH = parseInt(params.get('maxLength'), 10) || Infinity;
 		const NUMBER_OF_NAMES = parseInt(params.get('amount'), 10) || 3;
+		const POPULARITY = parseFloat(params.get('popularity')) || 1;
+		const BEGIN_WITH = params.get('beginWith') || '';
+		const END_WITH = params.get('endWith') || '';
 
 		const storageKey = "etunimitilasto.xlsx";
 		const nameListUrl = 'https://www.avoindata.fi/data/dataset/57282ad6-3ab1-48fb-983a-8aba5ff8d29a/resource/08c89936-a230-42e9-a9fc-288632e234f5/download/etunimitilasto-2020-02-06.xlsx';
@@ -82,19 +87,29 @@
 			};
 		}
 		function createNameListModel(nameList) {
-			const totalAmountOfNames = nameList.reduce((sum, row) => sum + row.amount, 0);
-			let totalAccumulatedWeight = 0;
-			return nameList.map(row => ({
+			const filteredList = nameList.filter(row =>
+				row.name.length >= MIN_LENGTH &&
+				row.name.length <= MAX_LENGTH &&
+				row.name.startsWith(BEGIN_WITH) &&
+				row.name.endsWith(END_WITH)
+			);
+
+			const totalNameWeight = filteredList.reduce((sum, row) => sum + getNameRowWeight(row), 0);
+			let accumulatedProbability = 0;
+			return filteredList.map(row => ({
 				name: row.name,
-				accumulatedWeight: totalAccumulatedWeight += (row.amount / totalAmountOfNames),
+				accumulatedProbability: accumulatedProbability += (getNameRowWeight(row) / totalNameWeight),
 			}));
+		}
+		function getNameRowWeight(row) {
+			return row.amount ** POPULARITY;
 		}
 
 		/* Name generation */
 		function generateName(nameListModel) {
-			const selectedNameWeight = Math.random();
-			const selectedRow = nameListModel.find(row => row.accumulatedWeight >= selectedNameWeight);
-			return selectedRow.name;
+			const selectedNameProbability = Math.random();
+			const selectedRow = nameListModel.find(row => row.accumulatedProbability >= selectedNameProbability);
+			return selectedRow ? selectedRow.name : '';
 		}
 
 		/* UI control */
