@@ -15,7 +15,7 @@
 		const MIN_LENGTH = parseInt(params.get('minLength'), 10) || 1;
 		const MAX_LENGTH = parseInt(params.get('maxLength'), 10) || Infinity;
 		const NUMBER_OF_NAMES = parseInt(params.get('amount'), 10) || 3;
-		const POPULARITY = parseFloat(params.get('popularity')) || 1;
+		const POPULARITY = params.has('popularity') ? (params.get('popularity')) : 1;
 		const BEGIN_WITH = params.get('beginWith') || '';
 		const END_WITH = params.get('endWith') || '';
 
